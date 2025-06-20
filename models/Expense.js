@@ -10,7 +10,7 @@ const expenseSchema = new mongoose.Schema(
     activity: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Activity",
-      default: null, // Optional link to activity
+      default: null,
     },
     title: {
       type: String,
@@ -24,7 +24,18 @@ const expenseSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["food", "stay", "transport", "shopping", "activity", "misc"],
+      enum: [
+        "food",
+        "stay",
+        "transport",
+        "shopping",
+        "activity",
+        "sightseeing",
+        "experience",
+        "travel",
+        "misc",
+        "other"
+      ],
       default: "misc",
     },
     date: {
@@ -34,6 +45,12 @@ const expenseSchema = new mongoose.Schema(
     notes: {
       type: String,
       trim: true,
+    },
+
+    // ✅ New field for AI-generated expenses
+    generatedByAI: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

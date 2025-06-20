@@ -3,8 +3,6 @@ const Trip = require("../models/Trip");
 const Activity = require("../models/Activity");
 const Expense = require("../models/Expense");
 const WishlistItem = require("../models/WishlistItem");
-const allowedTypes = ["activity", "food", "shopping", "experience", "sightseeing", "stay", "travel", "other"];
-
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,6 +11,7 @@ const openai = new OpenAI({
 exports.generateTripWithAI = async (req, res) => {
   const {
     destination,
+    origin,
     startDate,
     endDate,
     title = "AI Generated Trip",
@@ -29,46 +28,45 @@ exports.generateTripWithAI = async (req, res) => {
         .json({ message: "Trip duration cannot exceed 10 days." });
     }
 
-    // ✅ Enhanced prompt with coordinates instructions
     const prompt = `
-Create a ${numDays}-day travel itinerary for a trip to ${destination} from ${startDate} to ${endDate}.
+Create a ${numDays}-day travel itinerary for a user traveling from ${
+      origin || "origin"
+    } to ${destination} between ${startDate} and ${endDate}.
+
 For each day, suggest 2–3 activities. Each activity must include:
 - name
 - description
 - location (e.g., 'Eiffel Tower, Paris')
 - category (sightseeing, food, travel, stay, activity, other)
-- coordinates (latitude and longitude, only if confidently known. Example: Eiffel Tower = lat: 48.8584, lng: 2.2945)
+- coordinates (latitude and longitude, if confidently known)
 
-Also, provide 1–2 optional wishlistSuggestions for each day:
-- name
-- description
-- type (activity, food, shopping, experience)
-- location (if any)
+Also include 1–2 wishlist suggestions per day:
+- name, description, type (activity, food, shopping, experience), location
 
-⚠️ Return valid JSON in this format:
-[
-  {
-    "date": "2025-12-20",
-    "activities": [
-      {
-        "name": "...",
-        "description": "...",
-        "location": "...",
-        "category": "...",
-        "coordinates": { "lat": 0.0000, "lng": 0.0000 }
-      }
-    ],
-    "wishlistSuggestions": [
-      {
-        "name": "...",
-        "description": "...",
-        "type": "...",
-        "location": "..."
-      }
-    ]
+Additionally, estimate the following trip costs:
+- flightCost (round trip from ${origin || "origin"} to ${destination})
+- stayCost (accommodation cost for ${numDays} days)
+- foodCost (total or daily food expense)
+- transportCost (local travel)
+
+Return strict **valid JSON only** in this structure:
+{
+  "days": [
+    {
+      "date": "2025-12-20",
+      "activities": [ { ... }, { ... } ],
+      "wishlistSuggestions": [ { ... }, { ... } ]
+    },
+    ...
+  ],
+  "estimatedExpenses": {
+    "flightCost": 50000,
+    "stayCost": 30000,
+    "foodCost": 10000,
+    "transportCost": 5000
   }
-]
-    `;
+}
+`;
 
     const aiRes = await openai.chat.completions.create({
       model: "gpt-3.5-turbo-1106",
@@ -82,17 +80,20 @@ Also, provide 1–2 optional wishlistSuggestions for each day:
       ],
     });
 
-    // const parsed = JSON.parse(aiRes.choices[0].message.content);
+    // 🧹 Clean and parse response
     let content = aiRes.choices[0].message.content.trim();
 
-    // Remove Markdown code block if present (e.g. ```json ... ```)
     if (content.startsWith("```")) {
-      content = content.replace(/```(?:json)?/g, "").trim();
+      content = content
+        .replace(/```(?:json)?/g, "")
+        .replace(/```$/, "")
+        .trim();
     }
 
     const parsed = JSON.parse(content);
+    const { days, estimatedExpenses } = parsed;
 
-    // Step 1: Create trip
+    // Step 1: Create Trip
     const trip = await Trip.create({
       user: req.user._id,
       title,
@@ -102,11 +103,46 @@ Also, provide 1–2 optional wishlistSuggestions for each day:
       description: `AI generated itinerary for ${destination}`,
     });
 
-    // Step 2: Loop through days and create activities
-    for (const day of parsed) {
+    // Step 2: Add AI-generated expense estimates
+    if (estimatedExpenses) {
+      const expenseList = [
+        {
+          title: "Flight",
+          amount: estimatedExpenses.flightCost,
+          category: "travel",
+        },
+        {
+          title: "Accommodation",
+          amount: estimatedExpenses.stayCost,
+          category: "stay",
+        },
+        { title: "Food", amount: estimatedExpenses.foodCost, category: "food" },
+        {
+          title: "Transport",
+          amount: estimatedExpenses.transportCost,
+          category: "transport",
+        },
+      ];
+
+      for (const item of expenseList) {
+        if (item.amount && item.amount > 0) {
+          await Expense.create({
+            trip: trip._id,
+            title: item.title,
+            amount: item.amount,
+            category: item.category,
+            generatedByAI: true,
+            notes: "Estimated by AI",
+          });
+        }
+      }
+    }
+
+    // Step 3: Add activities + expenses
+    for (const day of days) {
       const dayDate = new Date(day.date);
 
-      for (const act of day.activities) {
+      for (const act of day.activities || []) {
         const activity = await Activity.create({
           trip: trip._id,
           name: act.name,
@@ -117,9 +153,9 @@ Also, provide 1–2 optional wishlistSuggestions for each day:
           coordinates: act.coordinates || undefined,
         });
 
+        // Optional activity cost
         const costAmount =
-          act.cost || act.estimatedCost || act.expense?.amount || 0;
-
+          act.cost || act.estimatedCost || (act.expense?.amount ?? 0);
         if (costAmount > 0) {
           const expense = await Expense.create({
             trip: trip._id,
@@ -129,6 +165,7 @@ Also, provide 1–2 optional wishlistSuggestions for each day:
             category: "activity",
             date: dayDate,
             notes: act.description || "",
+            generatedByAI: true,
           });
 
           activity.expense = expense._id;
@@ -136,15 +173,22 @@ Also, provide 1–2 optional wishlistSuggestions for each day:
         }
       }
 
-      // Step 3: Create wishlist suggestions
+      // Step 4: Wishlist suggestions
       if (day.wishlistSuggestions?.length) {
         for (const wish of day.wishlistSuggestions) {
-            const normalizedType = allowedTypes.includes(wish.type) ? wish.type : "other";
           await WishlistItem.create({
             user: req.user._id,
             trip: trip._id,
             title: wish.name,
-            type: normalizedType,
+            type: [
+              "activity",
+              "food",
+              "shopping",
+              "experience",
+              "other",
+            ].includes(wish.type)
+              ? wish.type
+              : "other",
             notes: wish.description || "",
             location: wish.location || "",
           });
