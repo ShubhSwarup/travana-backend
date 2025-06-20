@@ -20,7 +20,7 @@ const wishlistItemSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["activity", "food", "shopping", "experience", "other"],
+      enum: ["activity", "food", "shopping", "experience", "sightseeing", "stay", "travel", "other"],
       default: "other",
     },
     notes: {

@@ -41,7 +41,9 @@ const activitySchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["sightseeing", "food", "travel", "activity", "stay", "other"],
+      // enum: ["sightseeing", "food", "travel", "activity", "stay", "other"],
+      enum: ["activity", "food", "shopping", "experience", "sightseeing", "stay", "travel", "other"],
+
       default: "other",
     },
     expense: {
