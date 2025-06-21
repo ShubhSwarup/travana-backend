@@ -18,6 +18,7 @@ const checklistRoutes = require("./routes/checklist.routes");
 const budgetSummaryRoutes = require("./routes/budgetSummary.routes");
 const mapRoutes = require("./routes/map.routes");
 const aiRoutes = require('./routes/ai.routes');
+const externalRoutes = require('./routes/external.routes');
 
 
 const app = express();
@@ -47,6 +48,7 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use('/api/ai', aiRoutes);
+app.use("/api/cities", externalRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/trips/:tripId/activities", activityRoutes);
 app.use("/api/trips/:tripId/expenses", expenseRoutes);
