@@ -15,7 +15,7 @@ const tripSchema = new mongoose.Schema(
     },
     destination: {
       type: String,
-      maxlength: 100,
+      maxlength: 200,
       trim: true,
     },
     description: {

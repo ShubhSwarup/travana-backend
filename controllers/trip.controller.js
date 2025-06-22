@@ -92,6 +92,10 @@ exports.deleteTrip = async (req, res) => {
 
     // 🔥 Delete all related activities
     await Activity.deleteMany({ trip: trip._id });
+    await WishlistItem.deleteMany({ trip: trip._id });
+    await Booking.deleteMany({ trip: trip._id });
+    await ChecklistItem.deleteMany({ trip: trip._id });
+    await Expense.deleteMany({ trip: trip._id });
 
     res.json({ message: "Trip and all associated activities deleted" });
   } catch (err) {
@@ -107,13 +111,17 @@ exports.getTripOverview = async (req, res) => {
     const trip = await Trip.findOne({ _id: tripId, user: userId });
     if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    const [activities, expenses, wishlist, bookings, checklistItems] = await Promise.all([
-      Activity.find({ trip: tripId }).sort({ time: 1 }).limit(5).populate("expense"),
-      Expense.find({ trip: tripId }).sort({ date: -1 }).limit(5),
-      WishlistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
-      Booking.find({ trip: tripId }).sort({ date: 1 }).limit(5),
-      ChecklistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
-    ]);
+    const [activities, expenses, wishlist, bookings, checklistItems] =
+      await Promise.all([
+        Activity.find({ trip: tripId })
+          .sort({ time: 1 })
+          .limit(5)
+          .populate("expense"),
+        Expense.find({ trip: tripId }).sort({ date: -1 }).limit(5),
+        WishlistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
+        Booking.find({ trip: tripId }).sort({ date: 1 }).limit(5),
+        ChecklistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
+      ]);
 
     res.json({
       trip,

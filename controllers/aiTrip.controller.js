@@ -195,10 +195,9 @@ Return strict **valid JSON only** in this structure:
         }
       }
     }
-
     res
       .status(201)
-      .json({ message: "Trip created successfully", tripId: trip._id });
+      .json({ message: "Trip created successfully", _id: trip._id });
   } catch (err) {
     console.error("❌ AI Trip Creation Error:", err);
     res.status(500).json({ message: "Failed to generate trip with AI" });
