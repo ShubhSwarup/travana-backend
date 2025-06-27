@@ -110,14 +110,18 @@ exports.getTripOverview = async (req, res) => {
   try {
     const trip = await Trip.findOne({ _id: tripId, user: userId });
     if (!trip) return res.status(404).json({ message: "Trip not found" });
-
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const [activities, expenses, wishlist, bookings, checklistItems] =
       await Promise.all([
-        Activity.find({ trip: tripId })
+        Activity.find({
+          trip: tripId,
+          time: { $gte: today },
+        })
           .sort({ time: 1 })
-          .limit(5)
+          .limit(4)
           .populate("expense"),
-        Expense.find({ trip: tripId }).sort({ date: -1 }).limit(5),
+        Expense.find({ trip: tripId }).sort({ date: -1 }),
         WishlistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
         Booking.find({ trip: tripId }).sort({ date: 1 }).limit(5),
         ChecklistItem.find({ trip: tripId }).sort({ createdAt: -1 }).limit(5),
